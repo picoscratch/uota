@@ -101,7 +101,18 @@ def check_for_updates(version_check=True, quiet=False, pubkey_hash=b'') -> bool:
     if not ota_config['url'].endswith('/'):
         ota_config['url'] = ota_config['url'] + '/'
 
-    response = urequests.get(ota_config['url'] + 'latest')
+    auth = None
+    if 'user' in ota_config and 'password' in ota_config:
+        auth = (ota_config['user'], ota_config['password'])
+
+    response = urequests.get(ota_config['url'] + 'latest', auth=auth)
+
+    if response.status_code == 401:
+        log.error('Invalid or missing basic HTTP authentication!')
+        return False
+    if response.status_code != 200:
+        log.error('Other error: ' + response.status_code + " " + response.reason)
+        return False
 
     if ucertpin_available and pubkey_hash:
         server_pubkey_hash = get_pubkey_hash_from_der(response.raw.getpeercert(True))
@@ -134,7 +145,7 @@ def check_for_updates(version_check=True, quiet=False, pubkey_hash=b'') -> bool:
             import ubinascii
             hash_obj = uhashlib.sha256()
 
-        response = urequests.get(ota_config['url'] + remote_filename)
+        response = urequests.get(ota_config['url'] + remote_filename, auth=auth)
         with open(ota_config['tmp_filename'], 'wb') as f:
             while True:
                 chunk = response.raw.read(512)
